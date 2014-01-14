@@ -29,8 +29,8 @@ namespace GitgHistory
 
 		public GitgExt.Application? application { owned get; construct set; }
 
-		private Navigation? d_navigation_model;
 		private Gitg.CommitModel? d_commit_list_model;
+
 		private Gee.HashSet<Ggit.OId> d_selected;
 		private ulong d_insertsig;
 		private Settings d_settings;
@@ -47,18 +47,6 @@ namespace GitgHistory
 		public string id
 		{
 			owned get { return "/org/gnome/gitg/Activities/History"; }
-		}
-
-		[Notify]
-		public Gitg.Repository repository
-		{
-			set
-			{
-				if (value != null)
-				{
-					reload();
-				}
-			}
 		}
 
 		public void foreach_selected(GitgExt.ForeachCommitSelectionFunc func)
@@ -88,24 +76,13 @@ namespace GitgHistory
 			d_selected = new Gee.HashSet<Ggit.OId>((Gee.HashDataFunc<Ggit.OId>)Ggit.OId.hash,
 			                                       (Gee.EqualDataFunc<Ggit.OId>)Ggit.OId.equal);
 
-			d_navigation_model = new Navigation(application.repository);
-			d_navigation_model.ref_activated.connect((r) => {
-				on_ref_activated(d_navigation_model, r);
-			});
-
 			d_commit_list_model = new Gitg.CommitModel(application.repository);
 			d_commit_list_model.started.connect(on_commit_model_started);
 			d_commit_list_model.finished.connect(on_commit_model_finished);
 
 			update_sort_mode();
 
-			application.bind_property("repository", d_navigation_model,
-			                          "repository", BindingFlags.DEFAULT);
-
 			application.bind_property("repository", d_commit_list_model,
-			                          "repository", BindingFlags.DEFAULT);
-
-			application.bind_property("repository", this,
 			                          "repository", BindingFlags.DEFAULT);
 		}
 
@@ -197,35 +174,10 @@ namespace GitgHistory
 			return -1;
 		}
 
-		private void on_ref_activated(Navigation n, Gitg.Ref? r)
-		{
-			update_walker(n, r);
-		}
-
-		public void activate()
-		{
-			d_main.navigation_view.expand_all();
-			d_main.navigation_view.select_first();
-		}
-
-		public void reload()
-		{
-			double vadj = d_main.navigation_view.get_vadjustment().get_value();
-
-			d_navigation_model.reload();
-			d_main.navigation_view.expand_all();
-			d_main.navigation_view.select();
-
-			d_main.navigation_view.size_allocate.connect((a) => {
-				d_main.navigation_view.get_vadjustment().set_value(vadj);
-			});
-		}
-
 		private void build_ui()
 		{
 			d_main = new Paned();
 
-			d_main.navigation_view.model = d_navigation_model;
 			d_main.commit_list_view.model = d_commit_list_model;
 
 			d_main.commit_list_view.get_selection().changed.connect((sel) => {
@@ -243,6 +195,15 @@ namespace GitgHistory
 
 			d_panels = new Gitg.UIElements<GitgExt.HistoryPanel>(extset,
 			                                                     d_main.stack_panel);
+
+			d_main.refs_list.ref_activated.connect((r) => {
+				update_walker(r);
+			});
+
+			application.bind_property("repository", d_main.refs_list,
+			                          "repository",
+			                          BindingFlags.DEFAULT |
+			                          BindingFlags.SYNC_CREATE);
 		}
 
 		private void update_walker(Navigation n, Gitg.Ref? head)
@@ -275,25 +236,45 @@ namespace GitgHistory
 			else
 			{
 				var included = new Ggit.OId[] {};
+				var repo = application.repository;
 
-				// Simply push all the refs
-				foreach (Gitg.Ref r in n.all)
+				try
 				{
-					try
-					{
-						var resolved = r.resolve();
+					repo.references_foreach_name((nm) => {
+						Gitg.Ref? r;
 
 						try
 						{
-							var t = application.repository.lookup<Ggit.Tag>(resolved.get_target());
-							included += t.get_target_id();
-						}
-						catch
+							r = repo.lookup_reference(nm);
+						} catch { return 0; }
+
+						try
 						{
-							included += resolved.get_target();
-						}
-					} catch {}
-				}
+							var resolved = r.resolve();
+
+							try
+							{
+								var t = repo.lookup<Ggit.Tag>(resolved.get_target());
+								included += t.get_target_id();
+							}
+							catch
+							{
+								included += resolved.get_target();
+							}
+						} catch {}
+
+						return 0;
+					});
+				} catch {}
+
+				try
+				{
+					if (repo.is_head_detached())
+					{
+						var resolved = repo.get_head().resolve();
+						included += resolved.get_target();
+					}
+				} catch {}
 
 				d_commit_list_model.set_include(included);
 			}
