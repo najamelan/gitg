@@ -21,7 +21,7 @@ namespace Gitg
 {
 
 [GtkTemplate (ui = "/org/gnome/gitg/ui/gitg-window.ui")]
-public class Window : Gtk.ApplicationWindow, GitgExt.Application, GitgExt.ActionInterface, Initable
+public class Window : Gtk.ApplicationWindow, GitgExt.Application, Initable
 {
 	private Settings d_state_settings;
 	private Settings d_interface_settings;
@@ -624,11 +624,6 @@ public class Window : Gtk.ApplicationWindow, GitgExt.Application, GitgExt.Action
 	public Gee.Map<string, string> environment
 	{
 		owned get { return d_environment; }
-	}
-
-	public GitgExt.ActionInterface action_interface
-	{
-		owned get { return this; }
 	}
 }
 

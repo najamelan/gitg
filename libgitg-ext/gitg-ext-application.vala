@@ -46,11 +46,6 @@ public interface Application : Object
 	public abstract GitgExt.Activity? current_activity { owned get; }
 
 	/**
-	 * The application action interface.
-	 */
-	public abstract GitgExt.ActionInterface action_interface { owned get; }
-
-	/**
 	 * Set the current application main activity.
 	 *
 	 * @param id the id of the activity {@link UIElement.id}.
@@ -63,6 +58,8 @@ public interface Application : Object
 	public abstract void show_infobar(string          primary_msg,
 	                                  string          secondary_msg,
 	                                  Gtk.MessageType type);
+
+	public abstract void user_query(UserQuery query);
 
 	public abstract Gee.Map<string, string> environment { owned get; }
 }
