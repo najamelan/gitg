@@ -69,14 +69,6 @@ public class Window : Gtk.ApplicationWindow, GitgExt.Application, GitgExt.Action
 
 	[GtkChild]
 	private Gtk.Revealer d_infobar_revealer;
-	[GtkChild]
-	private Gtk.InfoBar d_infobar;
-	[GtkChild]
-	private Gtk.Label d_infobar_primary_label;
-	[GtkChild]
-	private Gtk.Label d_infobar_secondary_label;
-	[GtkChild]
-	private Gtk.Button d_infobar_close_button;
 
 	private static const ActionEntry[] win_entries = {
 		{"search", on_search_activated, null, "false", null},
@@ -125,9 +117,9 @@ public class Window : Gtk.ApplicationWindow, GitgExt.Application, GitgExt.Action
 	}
 
 	[GtkCallback]
-	private void dash_view_show_error(string primary_msg, string secondary_message)
+	private void dash_view_show_error(string title, string message)
 	{
-		show_infobar(primary_msg, secondary_message, Gtk.MessageType.ERROR);
+		show_infobar(title, message, Gtk.MessageType.ERROR);
 	}
 
 	construct
@@ -183,6 +175,21 @@ public class Window : Gtk.ApplicationWindow, GitgExt.Application, GitgExt.Action
 			d_header_bar.pack_end(d_gear_menu);
 			d_header_bar.pack_end(d_search_button);
 			d_header_bar.pack_end(d_activities_switcher);
+		}
+
+		d_infobar_revealer.notify["child-revealed"].connect(on_infobar_child_revealed);
+	}
+
+	private void on_infobar_child_revealed()
+	{
+		if (!d_infobar_revealer.child_revealed)
+		{
+			var child = d_infobar_revealer.get_child();
+
+			if (child != null)
+			{
+				child.destroy();
+			}
 		}
 	}
 
@@ -542,8 +549,8 @@ public class Window : Gtk.ApplicationWindow, GitgExt.Application, GitgExt.Action
 		{
 			string repo_name = path.get_basename();
 
-			var primary_msg = _("'%s' is not a Git repository.").printf(repo_name);
-			show_infobar(primary_msg, e.message, Gtk.MessageType.WARNING);
+			var title = _("'%s' is not a Git repository.").printf(repo_name);
+			show_infobar(title, e.message, Gtk.MessageType.WARNING);
 
 			return;
 		}
@@ -557,22 +564,61 @@ public class Window : Gtk.ApplicationWindow, GitgExt.Application, GitgExt.Action
 		this.repository = repository;
 	}
 
-	public void show_infobar(string          primary_msg,
-	                         string          secondary_msg,
+	public void show_infobar(string          title,
+	                         string          message,
 	                         Gtk.MessageType type)
 	{
-		d_infobar.message_type = type;
+		var query = new GitgExt.UserQuery();
 
-		var primary = "<b>%s</b>".printf(Markup.escape_text(primary_msg));
-		var secondary = "<small>%s</small>".printf(Markup.escape_text(secondary_msg));
+		query.title = title;
+		query.message = message;
+		query.message_type = type;
+		query.default_response = Gtk.ResponseType.CLOSE;
 
-		d_infobar_primary_label.set_label(primary);
-		d_infobar_secondary_label.set_label(secondary);
-		d_infobar_revealer.set_reveal_child(true);
+		query.responses = new GitgExt.UserQueryResponse[] {
+			new GitgExt.UserQueryResponse(_("Close"), Gtk.ResponseType.CLOSE)
+		};
 
-		d_infobar_close_button.clicked.connect(() => {
+		user_query(query);
+	}
+
+	public void user_query(GitgExt.UserQuery query)
+	{
+		var infobar = new InfoBar();
+
+		infobar.title = query.title;
+		infobar.message = query.message;
+		infobar.message_type = query.message_type;
+		infobar.show();
+
+		var child = d_infobar_revealer.get_child();
+
+		if (child != null)
+		{
+			child.destroy();
+			d_infobar_revealer.transition_type = Gtk.RevealerTransitionType.NONE;
+		}
+		else
+		{
+			d_infobar_revealer.transition_type = Gtk.RevealerTransitionType.SLIDE_DOWN;
+		}
+
+		foreach (var r in query.responses)
+		{
+			infobar.add_button(r.text, r.response_type);
+		}
+
+		d_infobar_revealer.add(infobar);
+
+		infobar.set_default_response(query.default_response);
+
+		infobar.response.connect((i, response) => {
 			d_infobar_revealer.set_reveal_child(false);
+
+			query.response((Gtk.ResponseType)response);
 		});
+
+		d_infobar_revealer.set_reveal_child(true);
 	}
 
 	public Gee.Map<string, string> environment
