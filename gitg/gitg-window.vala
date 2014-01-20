@@ -68,7 +68,7 @@ public class Window : Gtk.ApplicationWindow, GitgExt.Application, Initable
 	private Gtk.Stack d_stack_activities;
 
 	[GtkChild]
-	private Gtk.Revealer d_infobar_revealer;
+	private Gtk.Box d_infobar_placeholder;
 
 	private static const ActionEntry[] win_entries = {
 		{"search", on_search_activated, null, "false", null},
@@ -176,21 +176,6 @@ public class Window : Gtk.ApplicationWindow, GitgExt.Application, Initable
 			d_header_bar.pack_end(d_search_button);
 			d_header_bar.pack_end(d_activities_switcher);
 		}
-
-		d_infobar_revealer.notify["child-revealed"].connect(on_infobar_child_revealed);
-	}
-
-	private void on_infobar_child_revealed()
-	{
-		if (!d_infobar_revealer.child_revealed)
-		{
-			var child = d_infobar_revealer.get_child();
-
-			if (child != null)
-			{
-				child.destroy();
-			}
-		}
 	}
 
 	private void on_close_activated()
@@ -235,6 +220,14 @@ public class Window : Gtk.ApplicationWindow, GitgExt.Application, Initable
 		}
 	}
 
+	private void clear_infobar()
+	{
+		foreach (var child in d_infobar_placeholder.get_children())
+		{
+			child.destroy();
+		}
+	}
+
 	private void repository_changed()
 	{
 		if (d_repository != null)
@@ -253,7 +246,8 @@ public class Window : Gtk.ApplicationWindow, GitgExt.Application, Initable
 				}
 
 				title = @"$(d_repository.name) ($parent_path) - gitg";
-				d_infobar_revealer.set_reveal_child(false);
+
+				clear_infobar();
 			}
 
 			d_header_bar.set_title(d_repository.name);
@@ -589,36 +583,31 @@ public class Window : Gtk.ApplicationWindow, GitgExt.Application, Initable
 		infobar.title = query.title;
 		infobar.message = query.message;
 		infobar.message_type = query.message_type;
-		infobar.show();
-
-		var child = d_infobar_revealer.get_child();
-
-		if (child != null)
-		{
-			child.destroy();
-			d_infobar_revealer.transition_type = Gtk.RevealerTransitionType.NONE;
-		}
-		else
-		{
-			d_infobar_revealer.transition_type = Gtk.RevealerTransitionType.SLIDE_DOWN;
-		}
 
 		foreach (var r in query.responses)
 		{
 			infobar.add_button(r.text, r.response_type);
 		}
 
-		d_infobar_revealer.add(infobar);
+		var children = infobar.get_children();
+		clear_infobar();
+
+		if (children != null)
+		{
+			infobar.show();
+		}
+
+		d_infobar_placeholder.pack_start(infobar);
 
 		infobar.set_default_response(query.default_response);
 
 		infobar.response.connect((i, response) => {
-			d_infobar_revealer.set_reveal_child(false);
+			infobar.hide();
 
 			query.response((Gtk.ResponseType)response);
 		});
 
-		d_infobar_revealer.set_reveal_child(true);
+		infobar.show();
 	}
 
 	public Gee.Map<string, string> environment
